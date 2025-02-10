@@ -1,27 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
-import ReactDOM from 'react-dom'
-import invariant from 'tiny-invariant'
-
 import mergeRefs from '@atlaskit/ds-lib/merge-refs'
 import { triggerPostMoveFlash } from '@atlaskit/pragmatic-drag-and-drop-flourish/trigger-post-move-flash'
 import { attachClosestEdge, type Edge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { getReorderDestinationIndex } from '@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index'
-import * as liveRegion from '@atlaskit/pragmatic-drag-and-drop-live-region'
-import { DragHandleButton } from '@atlaskit/pragmatic-drag-and-drop-react-accessibility/drag-handle-button'
-import { DropIndicator } from '@atlaskit/pragmatic-drag-and-drop-react-drop-indicator/box'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { reorder } from '@atlaskit/pragmatic-drag-and-drop/reorder'
-import { Box, Grid, Stack, xcss } from '@atlaskit/primitives'
-import { token } from '@atlaskit/tokens'
 
 type CleanupFn = () => void
 
 type ItemEntry = { itemId: string; element: HTMLElement }
 
 type ListContextValue = {
-    getListLength: () => number
+    listLength: number
     registerItem: (entry: ItemEntry) => CleanupFn
     reorderItem: (args: { startIndex: number; indexOfTarget: number; closestEdgeOfTarget: Edge | null }) => void
     instanceId: symbol
@@ -31,7 +23,7 @@ const ListContext = createContext<ListContextValue | null>(null)
 
 function useListContext() {
     const listContext = useContext(ListContext)
-    invariant(listContext !== null)
+    if (listContext === null) throw new Error("ListContext can't be null")
     return listContext
 }
 
@@ -40,112 +32,34 @@ type Item = {
     label: string
 }
 
-const itemKey = Symbol('item')
 type ItemData = {
-    [itemKey]: true
     item: Item
     index: number
     instanceId: symbol
 }
 
-function getItemData({ item, index, instanceId }: { item: Item; index: number; instanceId: symbol }): ItemData {
-    return {
-        [itemKey]: true,
-        item,
-        index,
-        instanceId
-    }
-}
-
 function isItemData(data: Record<string | symbol, unknown>): data is ItemData {
-    return data[itemKey] === true
+    return data?.item !== undefined && data?.index !== undefined && data?.instanceId !== undefined
 }
-
-const listItemContainerStyles = xcss({
-    position: 'relative',
-    backgroundColor: 'elevation.surface',
-    borderWidth: 'border.width.0',
-    borderBottomWidth: token('border.width', '1px'),
-    borderStyle: 'solid',
-    borderColor: 'color.border',
-    ':last-of-type': {
-        borderWidth: 'border.width.0'
-    }
-})
-
-const listItemStyles = xcss({
-    position: 'relative',
-    padding: 'space.100'
-})
-
-const listItemDisabledStyles = xcss({ opacity: 0.4 })
-
-type DraggableState = { type: 'idle' } | { type: 'preview'; container: HTMLElement } | { type: 'dragging' }
-
-const idleState: DraggableState = { type: 'idle' }
-const draggingState: DraggableState = { type: 'dragging' }
-
-const listItemPreviewStyles = xcss({
-    paddingBlock: 'space.050',
-    paddingInline: 'space.100',
-    borderRadius: 'border.radius.100',
-    backgroundColor: 'elevation.surface.overlay',
-    maxWidth: '360px',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis'
-})
-
-const itemLabelStyles = xcss({
-    flexGrow: 1,
-    whiteSpace: 'nowrap',
-    textOverflow: 'ellipsis',
-    overflow: 'hidden'
-})
 
 function ListItem({ item, index }: { item: Item; index: number }) {
     const { registerItem, instanceId } = useListContext()
-
-    const ref = useRef<HTMLDivElement>(null)
     const [closestEdge, setClosestEdge] = useState<Edge | null>(null)
-
+    const ref = useRef<HTMLDivElement>(null)
     const dragHandleRef = useRef<HTMLButtonElement>(null)
-
-    const [draggableState, setDraggableState] = useState<DraggableState>(idleState)
 
     useEffect(() => {
         const element = ref.current
         const dragHandle = dragHandleRef.current
-        invariant(element)
-        invariant(dragHandle)
+        if (!element || !dragHandle) return
 
-        const data = getItemData({ item, index, instanceId })
+        const data = { item, index, instanceId }
 
         return combine(
             registerItem({ itemId: item.id, element }),
             draggable({
                 element: dragHandle,
-                getInitialData: () => data,
-                // onGenerateDragPreview({ nativeSetDragImage }) {
-                //     setCustomNativeDragPreview({
-                //         nativeSetDragImage,
-                //         getOffset: pointerOutsideOfPreview({
-                //             x: token('space.200', '16px'),
-                //             y: token('space.100', '8px')
-                //         }),
-                //         render({ container }) {
-                //             setDraggableState({ type: 'preview', container })
-
-                //             return () => setDraggableState(draggingState)
-                //         }
-                //     })
-                // },
-                onDragStart() {
-                    setDraggableState(draggingState)
-                },
-                onDrop() {
-                    setDraggableState(idleState)
-                }
+                getInitialData: () => data
             }),
             dropTargetForElements({
                 element,
@@ -167,21 +81,6 @@ function ListItem({ item, index }: { item: Item; index: number }) {
                     }
 
                     const closestEdge = extractClosestEdge(self.data)
-
-                    const sourceIndex = source.data.index
-                    invariant(typeof sourceIndex === 'number')
-
-                    const isItemBeforeSource = index === sourceIndex - 1
-                    const isItemAfterSource = index === sourceIndex + 1
-
-                    const isDropIndicatorHidden =
-                        (isItemBeforeSource && closestEdge === 'bottom') || (isItemAfterSource && closestEdge === 'top')
-
-                    if (isDropIndicatorHidden) {
-                        setClosestEdge(null)
-                        return
-                    }
-
                     setClosestEdge(closestEdge)
                 },
                 onDragLeave() {
@@ -194,43 +93,12 @@ function ListItem({ item, index }: { item: Item; index: number }) {
         )
     }, [instanceId, item, index, registerItem])
 
-    // return (
-    //     <>
-    //         <div ref={ref} className="slide">
-    //             <DragHandleButton ref={mergeRefs([dragHandleRef])} label={`Reorder ${item.label}`} />
-    //             <Box xcss={itemLabelStyles}>{item.label}</Box>
-
-    //             {closestEdge && <DropIndicator edge={closestEdge} gap="1px" />}
-    //         </div>
-    //         {/* {draggableState.type === 'preview' &&
-    //             ReactDOM.createPortal(<Box xcss={listItemPreviewStyles}>{item.label}</Box>, draggableState.container)} */}
-    //     </>
-    // )
-
     return (
-        <>
-            <Box ref={ref} xcss={listItemContainerStyles}>
-                <Grid
-                    alignItems="center"
-                    columnGap="space.050"
-                    templateColumns="auto 1fr auto"
-                    xcss={[
-                        listItemStyles,
-                        /**
-                         * We are applying the disabled effect to the inner element so that
-                         * the border and drop indicator are not affected.
-                         */
-                        draggableState.type === 'dragging' && listItemDisabledStyles
-                    ]}
-                >
-                    <DragHandleButton ref={mergeRefs([dragHandleRef])} label={`Reorder ${item.label}`} />
-                    <Box xcss={itemLabelStyles}>{item.label}</Box>
-                </Grid>
-                {closestEdge && <DropIndicator edge={closestEdge} gap="1px" />}
-            </Box>
-            {draggableState.type === 'preview' &&
-                ReactDOM.createPortal(<Box xcss={listItemPreviewStyles}>{item.label}</Box>, draggableState.container)}
-        </>
+        <div ref={ref}>
+            {closestEdge && closestEdge === 'top' && <div className="border-t"></div>}
+            <div ref={mergeRefs([dragHandleRef])}>{item.label}</div>
+            {closestEdge && closestEdge === 'bottom' && <div className="border-b"></div>}
+        </div>
     )
 }
 
@@ -248,14 +116,6 @@ const defaultItems: Item[] = [
         label: 'Update company website content'
     }
 ]
-
-const containerStyles = xcss({
-    maxWidth: '400px',
-    borderWidth: 'border.width',
-    borderStyle: 'solid',
-    borderColor: 'color.border',
-    color: 'color.text.accent.red'
-})
 
 function getItemRegistry() {
     const registry = new Map<string, HTMLElement>()
@@ -277,20 +137,18 @@ function getItemRegistry() {
 
 type ListState = {
     items: Item[]
-    lastCardMoved: {
+    lastMoved: {
         item: Item
-        previousIndex: number
-        currentIndex: number
-        numberOfItems: number
     } | null
 }
 
 export default function ListExample() {
-    const [{ items, lastCardMoved }, setListState] = useState<ListState>({
+    const [{ items, lastMoved }, setListState] = useState<ListState>({
         items: defaultItems,
-        lastCardMoved: null
+        lastMoved: null
     })
-    const [registry] = useState(getItemRegistry)
+
+    const registry = getItemRegistry()
 
     // Isolated instances of this component from one another
     const [instanceId] = useState(() => Symbol('instance-id'))
@@ -326,11 +184,8 @@ export default function ListExample() {
                         startIndex,
                         finishIndex
                     }),
-                    lastCardMoved: {
-                        item,
-                        previousIndex: startIndex,
-                        currentIndex: finishIndex,
-                        numberOfItems: listState.items.length
+                    lastMoved: {
+                        item
                     }
                 }
             })
@@ -360,12 +215,10 @@ export default function ListExample() {
                     return
                 }
 
-                const closestEdgeOfTarget = extractClosestEdge(targetData)
-
                 reorderItem({
                     startIndex: sourceData.index,
                     indexOfTarget,
-                    closestEdgeOfTarget
+                    closestEdgeOfTarget: extractClosestEdge(targetData)
                 })
             }
         })
@@ -373,55 +226,29 @@ export default function ListExample() {
 
     // once a drag is finished, we have some post drop actions to take
     useEffect(() => {
-        if (lastCardMoved === null) {
+        if (lastMoved === null) {
             return
         }
 
-        const { item, previousIndex, currentIndex, numberOfItems } = lastCardMoved
+        const { item } = lastMoved
         const element = registry.getElement(item.id)
-        if (element) {
-            triggerPostMoveFlash(element)
-        }
-
-        liveRegion.announce(
-            `You've moved ${item.label} from position ${previousIndex + 1} to position ${
-                currentIndex + 1
-            } of ${numberOfItems}.`
-        )
-    }, [lastCardMoved, registry])
-
-    // cleanup the live region when this component is finished
-    useEffect(() => {
-        return function cleanup() {
-            liveRegion.cleanup()
-        }
-    }, [])
-
-    const getListLength = useCallback(() => items.length, [items.length])
+        if (element) triggerPostMoveFlash(element)
+    }, [lastMoved, registry])
 
     const contextValue: ListContextValue = useMemo(() => {
         return {
             registerItem: registry.register,
             reorderItem,
             instanceId,
-            getListLength
+            listLength: items.length
         }
-    }, [registry.register, reorderItem, instanceId, getListLength])
+    }, [registry.register, reorderItem, instanceId, items.length])
 
     return (
         <ListContext.Provider value={contextValue}>
-            <Stack xcss={containerStyles}>
-                {/*
-          It is not expensive for us to pass `index` to items for this example,
-          as when reordering, only two items index will ever change.
-
-          If insertion or removal where allowed, it would be worth making
-          `index` a getter (eg `getIndex()`) to avoid re-rendering many items
-        */}
-                {items.map((item, index) => (
-                    <ListItem key={item.id} item={item} index={index} />
-                ))}
-            </Stack>
+            {items.map((item, index) => (
+                <ListItem key={item.id} item={item} index={index} />
+            ))}
         </ListContext.Provider>
     )
 }

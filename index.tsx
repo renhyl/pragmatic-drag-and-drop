@@ -1,13 +1,11 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import '@atlaskit/css-reset';
-import AppProvider from '@atlaskit/app-provider';
+import React from 'react'
+import Example from './src/example'
 
-import Example from './example';
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
 
-ReactDOM.render(
-  <AppProvider>
-    <Example />
-  </AppProvider>,
-  document.getElementById('root')
-);
+createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+        <Example />
+    </StrictMode>
+)
