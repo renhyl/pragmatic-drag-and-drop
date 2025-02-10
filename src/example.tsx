@@ -16,7 +16,7 @@ type ListContextValue = {
     listLength: number
     registerItem: (entry: ItemEntry) => CleanupFn
     reorderItem: (args: { startIndex: number; indexOfTarget: number; closestEdgeOfTarget: Edge | null }) => void
-    instanceId: symbol
+    instanceId: string
 }
 
 const ListContext = createContext<ListContextValue | null>(null)
@@ -35,7 +35,7 @@ type Item = {
 type ItemData = {
     item: Item
     index: number
-    instanceId: symbol
+    instanceId: string
 }
 
 function isItemData(data: Record<string | symbol, unknown>): data is ItemData {
@@ -151,7 +151,7 @@ export default function ListExample() {
     const registry = getItemRegistry()
 
     // Isolated instances of this component from one another
-    const [instanceId] = useState(() => Symbol('instance-id'))
+    const instanceId = 'instance-id'
 
     const reorderItem = useCallback(
         ({

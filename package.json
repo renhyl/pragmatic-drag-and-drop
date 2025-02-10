@@ -10,6 +10,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
+        "@atlaskit/ds-lib": "^3.5.1",
         "@atlaskit/pragmatic-drag-and-drop": "1.5.0",
         "@atlaskit/pragmatic-drag-and-drop-flourish": "^1.2.0",
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.0.3",
